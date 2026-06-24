@@ -10,7 +10,10 @@
           class="nav-item" 
           active-class="active"
         >
-          {{ item.name }}
+          <span class="item-text">{{ item.name }}</span>
+          <svg class="drag-handle" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/>
+          </svg>
         </router-link>
       </nav>
       
@@ -88,6 +91,7 @@ onMounted(() => {
     Sortable.create(menuRef.value, {
       animation: 150,
       ghostClass: 'sortable-ghost',
+      handle: '.drag-handle',
       onEnd: (evt) => {
         const oldIndex = evt.oldIndex;
         const newIndex = evt.newIndex;
@@ -146,11 +150,33 @@ onUnmounted(() => {
   border-radius: 12px;
   font-weight: 500;
   transition: all 0.2s;
-  cursor: grab;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.nav-item:active {
+.item-text {
+  flex: 1;
+}
+
+.drag-handle {
+  opacity: 0;
+  cursor: grab;
+  color: var(--text-muted);
+  transition: opacity 0.2s;
+}
+
+.drag-handle:active {
   cursor: grabbing;
+}
+
+.nav-item:hover .drag-handle {
+  opacity: 0.5;
+}
+
+.drag-handle:hover {
+  opacity: 1 !important;
+  color: var(--primary);
 }
 
 .sortable-ghost {
