@@ -32,12 +32,19 @@
               <label>Tên Phiên (Tùy chọn)</label>
               <input v-model="form.title" type="text" placeholder="VD: Khui kiện si Hàn 24/06" class="input-field"/>
             </div>
-            <div class="form-group">
-              <label>Username / Link Live (Bắt buộc)</label>
-              <input v-model="form.platformSessionId" type="text" placeholder="@username hoặc link" class="input-field"/>
+            <div class="form-group" :class="{ 'has-error': errors.platformSessionId }">
+              <label>Username / Link Live <span class="required-star">*</span></label>
+              <input 
+                v-model="form.platformSessionId" 
+                @input="errors.platformSessionId = false"
+                type="text" 
+                placeholder="@username hoặc link" 
+                class="input-field"
+              />
+              <span v-if="errors.platformSessionId" class="error-message">Trường này là bắt buộc. Vui lòng nhập Username hoặc Link Live.</span>
             </div>
             
-            <button type="submit" class="btn-primary" :disabled="loading || !form.platformSessionId.trim()">
+            <button type="submit" class="btn-primary" :disabled="loading">
               <span v-if="loading" class="spinner"></span>
               <span v-else>Khởi Tạo Phiên</span>
             </button>
@@ -119,11 +126,16 @@ const fetchSessions = async () => {
   }
 };
 
+const errors = ref({
+  platformSessionId: false
+});
+
 const handleCreateSession = async () => {
   if (!form.value.platformSessionId.trim()) {
-    alert("Vui lòng nhập Username hoặc Link phiên Live!");
+    errors.value.platformSessionId = true;
     return;
   }
+  errors.value.platformSessionId = false;
 
   loading.value = true;
   try {
@@ -260,6 +272,27 @@ onMounted(() => {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.required-star {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.form-group.has-error .input-field {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.form-group.has-error .input-field:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.error-message {
+  color: #ef4444;
+  font-size: 0.85rem;
+  margin-top: 0.3rem;
+  animation: slideIn 0.2s ease-out;
 }
 
 /* Custom Select */
