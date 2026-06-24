@@ -3,10 +3,10 @@
     <aside class="sidebar glass-panel-nav">
       <div class="logo">🚀 OfMe Live</div>
       <nav class="nav-menu">
-        <router-link to="/products" class="nav-item" active-class="active">📦 Kho Hàng</router-link>
-        <router-link to="/live-setup" class="nav-item" active-class="active">⚙️ Cấu Hình Live</router-link>
-        <router-link to="/live-console" class="nav-item" active-class="active">🎙️ Màn Hình Live</router-link>
-        <router-link to="/order-review" class="nav-item" active-class="active">🛒 Đơn Hàng</router-link>
+        <router-link to="/products" class="nav-item" active-class="active">Kho Hàng</router-link>
+        <router-link to="/live-setup" class="nav-item" active-class="active">Cấu Hình Live</router-link>
+        <router-link to="/live-console" class="nav-item" active-class="active">Màn Hình Live</router-link>
+        <router-link to="/order-review" class="nav-item" active-class="active">Đơn Hàng</router-link>
       </nav>
       
     </aside>
