@@ -2,6 +2,22 @@ use tauri::State;
 use crate::db::DbState;
 use crate::events::models::{IncomingEvent, LiveEvent};
 use crate::events::ingestion::EventIngestionService;
+use crate::events::repository::EventRepository;
+
+#[tauri::command]
+pub async fn get_session_events(
+    session_id: String,
+    limit: Option<i64>,
+    state: State<'_, DbState>,
+) -> Result<Vec<LiveEvent>, String> {
+    let repo = EventRepository::new(&state.pool);
+    let mut events = repo
+        .list_events_by_session(&session_id, limit.unwrap_or(500))
+        .await
+        .map_err(|e| e.to_string())?;
+    events.reverse();
+    Ok(events)
+}
 
 #[tauri::command]
 pub async fn test_ingest_event(

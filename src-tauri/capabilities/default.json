@@ -12,7 +12,18 @@
       "allow": [
         {
           "args": true,
-          "name": "tiktok-connector"
+          "name": "node-homebrew",
+          "cmd": "/opt/homebrew/bin/node"
+        },
+        {
+          "args": true,
+          "name": "node-local",
+          "cmd": "/usr/local/bin/node"
+        },
+        {
+          "args": true,
+          "name": "node",
+          "cmd": "node"
         }
       ]
     }

@@ -18,7 +18,7 @@ pub struct LiveEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct IncomingEvent {
     pub source: String,
     pub platform_event_id: Option<String>,

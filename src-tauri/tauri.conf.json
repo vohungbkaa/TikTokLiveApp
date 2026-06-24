@@ -24,8 +24,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": [
-      "bin/tiktok-connector"
+    "resources": [
+      "bin/tiktok-connector-bundle.cjs"
     ],
     "icon": [
       "icons/32x32.png",

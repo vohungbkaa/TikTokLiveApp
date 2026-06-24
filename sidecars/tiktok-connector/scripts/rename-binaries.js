@@ -7,14 +7,10 @@ const binDir = path.join(__dirname, '../../../src-tauri/bin');
 const mapping = {
   'tiktok-connector-macos': [
     'tiktok-connector-x86_64-apple-darwin',
-    'tiktok-connector-aarch64-apple-darwin'
+    'tiktok-connector-aarch64-apple-darwin',
   ],
-  'tiktok-connector-win.exe': [
-    'tiktok-connector-x86_64-pc-windows-msvc.exe'
-  ],
-  'tiktok-connector-linux': [
-    'tiktok-connector-x86_64-unknown-linux-gnu'
-  ]
+  'tiktok-connector-win.exe': ['tiktok-connector-x86_64-pc-windows-msvc.exe'],
+  'tiktok-connector-linux': ['tiktok-connector-x86_64-unknown-linux-gnu'],
 };
 
 for (const [source, targets] of Object.entries(mapping)) {

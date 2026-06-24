@@ -51,6 +51,7 @@ pub fn run() {
             commands::product::list_products,
             commands::product::create_product,
             commands::product::update_stock,
+            commands::event::get_session_events,
             commands::event::test_ingest_event,
             commands::parser::debug_parse_comment,
             commands::order::list_orders_by_session,

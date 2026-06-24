@@ -41,17 +41,37 @@ impl ConnectorSupervisor {
                     match msg_type {
                         "event" => {
                             if let Some(data) = msg.get("data") {
-                                if let Ok(incoming) = serde_json::from_value::<IncomingEvent>(data.clone()) {
-                                    let _ = ingestion_svc.ingest(&session_id_cloned, incoming).await;
-                                } else {
-                                    tracing::error!("Failed to parse incoming event: {:?}", data);
+                                match serde_json::from_value::<IncomingEvent>(data.clone()) {
+                                    Ok(incoming) => match ingestion_svc
+                                        .ingest(&session_id_cloned, incoming)
+                                        .await
+                                    {
+                                        Ok(event) => tracing::debug!(
+                                            "Ingested comment from {} for session {}",
+                                            event.display_name.as_deref().unwrap_or("unknown"),
+                                            session_id_cloned
+                                        ),
+                                        Err(e) if e == "Duplicate event" => {}
+                                        Err(e) => tracing::warn!("Ingest failed: {}", e),
+                                    },
+                                    Err(err) => {
+                                        tracing::error!(
+                                            "Failed to parse incoming event: {} | data={}",
+                                            err,
+                                            data
+                                        );
+                                    }
                                 }
                             }
                         }
                         "health" => {
+                            if let Some(stage) = msg.get("stage").and_then(|s| s.as_str()) {
+                                tracing::info!("Sidecar health: {}", stage);
+                            }
                             let _ = app_handle.emit("connector:health", &msg);
                         }
                         "error" => {
+                            tracing::error!("Sidecar error event: {:?}", msg);
                             let _ = app_handle.emit("connector:error", &msg);
                         }
                         _ => {}

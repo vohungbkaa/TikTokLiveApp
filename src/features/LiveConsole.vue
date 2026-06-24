@@ -4,11 +4,17 @@
       <!-- Left side: Video/Stats Placeholder -->
       <div class="left-panel">
         <div class="glass-panel video-placeholder">
-          <div class="status-indicator">
-            <span class="pulse-dot"></span> Đang Phát Trực Tiếp
+          <div class="status-indicator" :class="connectorStatus">
+            <span class="pulse-dot"></span> {{ statusLabel }}
           </div>
-          <h2>Live Stream Preview</h2>
-          <p class="muted">Tín hiệu video sẽ hiển thị ở đây (nếu có connector hỗ trợ)</p>
+          <h2 v-if="activeSession">{{ activeSession.title || activeSession.platformSessionId || 'Phiên Live' }}</h2>
+          <h2 v-else>Chưa có phiên live đang chạy</h2>
+          <p class="muted" v-if="activeSession">
+            @{{ liveUsername }} · {{ activeSession.status }}
+          </p>
+          <p class="muted" v-else>
+            Vào tab "Cấu Hình Live" để tạo và bắt đầu phiên.
+          </p>
         </div>
 
         <div class="stats-cards">
@@ -60,27 +66,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import type { LiveEvent } from '../types/live-event';
+import type { LiveSession } from '../types/session';
 
 const events = ref<LiveEvent[]>([]);
+const activeSession = ref<LiveSession | null>(null);
+const connectorStatus = ref<'connected' | 'connecting' | 'disconnected'>('disconnected');
 const chatStreamRef = ref<HTMLElement | null>(null);
 const mockComment = ref('');
-let unlisten: (() => void) | null = null;
+const unlisteners: Array<() => void> = [];
 
-// The UI batch emit logic is implemented via Vue's reactivity and nextTick handling.
-// In a very high frequency scenario, we would push to a buffer and flush every 100ms.
+const liveUsername = computed(() => {
+  const raw = activeSession.value?.platformSessionId || '';
+  return raw.replace(/^https?:\/\/(www\.)?tiktok\.com\/@/i, '').replace(/^@/, '').split(/[/?]/)[0] || raw;
+});
+
+const statusLabel = computed(() => {
+  if (!activeSession.value) return 'Chưa kết nối';
+  if (connectorStatus.value === 'connected') return 'Đang Phát Trực Tiếp';
+  if (connectorStatus.value === 'connecting') return 'Đang kết nối...';
+  return 'Mất kết nối';
+});
+
 const buffer: LiveEvent[] = [];
 let flushTimeout: number | null = null;
 
 const flushBuffer = () => {
   if (buffer.length > 0) {
     events.value.push(...buffer);
-    buffer.length = 0; // clear buffer
-    
-    // Auto scroll to bottom
+    buffer.length = 0;
+
     nextTick(() => {
       if (chatStreamRef.value) {
         chatStreamRef.value.scrollTop = chatStreamRef.value.scrollHeight;
@@ -91,35 +109,87 @@ const flushBuffer = () => {
 };
 
 const handleNewEvent = (event: LiveEvent) => {
+  if (activeSession.value && event.sessionId !== activeSession.value.id) return;
   buffer.push(event);
   if (!flushTimeout) {
-    flushTimeout = window.setTimeout(flushBuffer, 100); // 100ms batching (M05-T06)
+    flushTimeout = window.setTimeout(flushBuffer, 100);
+  }
+};
+
+const loadRunningSession = async () => {
+  try {
+    const sessions = await invoke<LiveSession[]>('get_sessions');
+    const running = sessions.find((s) => s.status === 'running') || null;
+    activeSession.value = running;
+
+    if (running) {
+      connectorStatus.value = 'connecting';
+      const history = await invoke<LiveEvent[]>('get_session_events', {
+        sessionId: running.id,
+        limit: 500,
+      });
+      events.value = history;
+      nextTick(() => {
+        if (chatStreamRef.value) {
+          chatStreamRef.value.scrollTop = chatStreamRef.value.scrollHeight;
+        }
+      });
+    } else {
+      events.value = [];
+      connectorStatus.value = 'disconnected';
+    }
+  } catch (e) {
+    console.error('Lỗi khi tải phiên live:', e);
   }
 };
 
 onMounted(async () => {
-  unlisten = await listen<LiveEvent>('live_event_received', (event) => {
-    handleNewEvent(event.payload);
-  });
+  await loadRunningSession();
+
+  unlisteners.push(
+    await listen<LiveEvent>('live_event_received', (event) => {
+      handleNewEvent(event.payload);
+    })
+  );
+
+  unlisteners.push(
+    await listen<string>('session:started', async () => {
+      await loadRunningSession();
+    })
+  );
+
+  unlisteners.push(
+    await listen<{ stage?: string; ok?: boolean }>('connector:health', (event) => {
+      const stage = event.payload.stage;
+      if (stage === 'connected') connectorStatus.value = 'connected';
+      else if (stage === 'connecting' || stage === 'reconnecting') connectorStatus.value = 'connecting';
+      else if (stage === 'disconnected' || stage === 'stream_ended') connectorStatus.value = 'disconnected';
+    })
+  );
+
+  unlisteners.push(
+    await listen('connector:status', () => {
+      connectorStatus.value = 'disconnected';
+    })
+  );
 });
 
 onUnmounted(() => {
-  if (unlisten) unlisten();
+  unlisteners.forEach((fn) => fn());
   if (flushTimeout) clearTimeout(flushTimeout);
 });
 
 const sendMockComment = async () => {
-  if (!mockComment.value.trim()) return;
-  
+  if (!mockComment.value.trim() || !activeSession.value) return;
+
   try {
-    // We'll call a command to simulate ingestion
-    await invoke('test_ingest_event', { 
-      sessionId: 'test-session', 
-      comment: mockComment.value 
+    await invoke('test_ingest_event', {
+      sessionId: activeSession.value.id,
+      comment: mockComment.value,
     });
     mockComment.value = '';
   } catch (e) {
-    console.error("Lỗi:", e);
+    console.error('Lỗi:', e);
   }
 };
 </script>
@@ -181,8 +251,23 @@ const sendMockComment = async () => {
 .pulse-dot {
   width: 10px;
   height: 10px;
-  background-color: #ef4444;
   border-radius: 50%;
+}
+
+.status-indicator.connecting .pulse-dot {
+  background-color: #f59e0b;
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 1);
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.disconnected .pulse-dot {
+  background-color: #64748b;
+  animation: none;
+  box-shadow: none;
+}
+
+.status-indicator.connected .pulse-dot {
+  background-color: #ef4444;
   box-shadow: 0 0 0 0 rgba(239, 68, 68, 1);
   animation: pulse 2s infinite;
 }

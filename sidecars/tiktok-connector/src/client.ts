@@ -1,4 +1,4 @@
-const { WebcastPushConnection } = require('tiktok-live-connector');
+import { TikTokLiveConnection } from 'tiktok-live-connector';
 import { emitHealth, emitError, emitEvent } from './protocol';
 import { mapCommentEvent } from './mappers';
 
@@ -11,7 +11,7 @@ export class TikTokClient {
     public async connect() {
         emitHealth("room_resolve", true);
         
-        this.connection = new WebcastPushConnection(this.username, {
+        this.connection = new TikTokLiveConnection(this.username, {
             processInitialData: false,
             enableExtendedGiftInfo: false,
             enableWebsocketUpgrade: true,

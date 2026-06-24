@@ -98,9 +98,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import type { LiveSession, CreateSessionInput } from '../types/session';
 import { X, Trash2 } from 'lucide-vue-next';
+
+const router = useRouter();
 
 const sessions = ref<LiveSession[]>([]);
 const loading = ref(false);
@@ -154,6 +157,7 @@ const handleStartSession = async (id: string) => {
   try {
     await invoke('start_session', { id });
     await fetchSessions();
+    await router.push('/live-console');
   } catch (e) {
     console.error("Lỗi khi bắt đầu phiên:", e);
   }
