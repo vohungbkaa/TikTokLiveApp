@@ -4,6 +4,8 @@
 
 Chỉ phục vụ những phần cần online: license, config, update, kill switch, log lỗi. Không đặt core order workflow lên cloud trong MVP.
 
+Các tính năng cộng đồng như chia sẻ cảnh báo khách bom hàng/nghi phá live chỉ được xem là phase sau MVP, vì cần xử lý quyền riêng tư, chống lạm dụng, kiểm duyệt dữ liệu và cơ chế khiếu nại.
+
 ## Service cần có
 
 - License Service:
@@ -22,12 +24,20 @@ Chỉ phục vụ những phần cần online: license, config, update, kill swi
 - Error Log Service:
   - nhận health/error logs
   - dashboard lỗi diện rộng
+- Community Risk Alert Service (phase sau MVP):
+  - nhận báo cáo khách rủi ro từ shop đã opt-in
+  - lưu bằng chứng tối thiểu, lý do, thời điểm, nguồn báo cáo
+  - ẩn/giảm thông tin nhạy cảm trước khi chia sẻ cho shop khác
+  - tính điểm tin cậy theo số lần báo cáo, độ tin cậy shop báo cáo, trạng thái xác minh
+  - trả cảnh báo/risk score cho app khi khách có dấu hiệu trùng khớp
+  - hỗ trợ phản hồi, khiếu nại và gỡ cảnh báo sai
 
 ## Done khi
 
 - App vẫn dùng được nếu cloud tạm lỗi, trừ tính năng license/update.
 - Bật được kill switch khi connector chết diện rộng.
 - Grace period khi không gọi được license server là 7 ngày.
+- Nếu Community Risk Alert Service lỗi, app vẫn xử lý đơn bình thường và chỉ mất cảnh báo cộng đồng.
 
 ## Task coding chi tiết
 
@@ -86,3 +96,11 @@ Chỉ phục vụ những phần cần online: license, config, update, kill swi
 - Dependency: M17-T02, M08-T09.
 - Output: config `primary_enabled=false` chuyển fallback/manual.
 - Done khi: mock config kill switch làm primary không start.
+
+### M17-T08 - Thiết kế Community Risk Alert Service (phase sau MVP)
+
+- Mục tiêu: xác định thiết kế trước khi triển khai cảnh báo khách rủi ro dùng chung giữa các shop.
+- File/thư mục dự kiến: `.system_design/community_risk_alert.md`, cloud service spec.
+- Dependency: M13-T07.
+- Output: spec về dữ liệu được chia sẻ, consent/opt-in, risk score, bằng chứng, khiếu nại, retention, rate limit và anti-abuse.
+- Done khi: có tài liệu đủ để review pháp lý/sản phẩm trước khi coding.

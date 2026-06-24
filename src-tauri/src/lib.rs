@@ -2,6 +2,7 @@ use tauri::Manager;
 
 pub mod commands;
 pub mod connectors;
+pub mod customers;
 pub mod db;
 pub mod diagnostics;
 pub mod events;
@@ -9,6 +10,7 @@ pub mod inventory;
 pub mod orders;
 pub mod parser;
 pub mod products;
+pub mod selling_modes;
 pub mod sessions;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -46,7 +48,11 @@ pub fn run() {
             commands::product::create_product,
             commands::product::update_stock,
             commands::event::test_ingest_event,
-            commands::parser::debug_parse_comment
+            commands::parser::debug_parse_comment,
+            commands::order::list_orders_by_session,
+            commands::order::get_order_summary,
+            commands::customer::search_customers,
+            commands::customer::update_customer_profile
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -23,7 +23,16 @@ Quản lý thông tin khách trong phiên live và lịch sử cơ bản.
   - khách quen
   - cần xác minh
   - boom nội bộ
-- Hỗ trợ blacklist nội bộ của shop ở Phase 3.
+- Hỗ trợ danh sách cảnh báo nội bộ của shop ở Phase 3:
+  - khách từng đặt rồi boom
+  - khách cần xác minh trước khi giữ hàng
+  - tài khoản nghi phá live/chốt ảo
+  - lý do, bằng chứng nội bộ, số lần vi phạm, thời điểm ghi nhận
+- Hỗ trợ cảnh báo cộng đồng ở phase sau nếu có cloud service:
+  - shop chủ động opt-in chia sẻ/nhận cảnh báo
+  - dữ liệu chia sẻ phải được giảm thông tin nhạy cảm
+  - chỉ hiển thị cảnh báo/risk score, không tự động cấm khách
+  - có cơ chế ghi bằng chứng, phản hồi/khiếu nại, gỡ cảnh báo sai
 - Gợi ý khách trong Manual Capture.
 
 ## Task coding chi tiết
@@ -76,7 +85,15 @@ Quản lý thông tin khách trong phiên live và lịch sử cơ bản.
 - Output: add/remove/list tags.
 - Done khi: gắn tag và query theo tag.
 
-### M13-T07 - API gợi ý khách cho Manual Capture
+### M13-T07 - Tạo danh sách cảnh báo nội bộ
+
+- Mục tiêu: cảnh báo nhân viên khi khách có rủi ro đặt rồi boom hoặc nghi phá live.
+- File/thư mục dự kiến: migration customer risk flags, `src-tauri/src/customers/risk.rs`.
+- Dependency: M13-T02, M13-T06.
+- Output: add/update/remove risk flag, lưu lý do và bằng chứng nội bộ.
+- Done khi: khách bị gắn risk flag hiển thị cảnh báo trong màn hình live/order.
+
+### M13-T08 - API gợi ý khách cho Manual Capture
 
 - Mục tiêu: autocomplete khách.
 - File/thư mục dự kiến: `src-tauri/src/commands/customer.rs`.

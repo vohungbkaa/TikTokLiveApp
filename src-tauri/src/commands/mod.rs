@@ -1,5 +1,7 @@
 pub mod app;
-pub mod session;
-pub mod product;
+pub mod customer;
 pub mod event;
+pub mod order;
 pub mod parser;
+pub mod product;
+pub mod session;
