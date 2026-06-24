@@ -127,8 +127,9 @@ const sendMockComment = async () => {
 <style scoped>
 .live-console {
   padding: 1.5rem;
-  height: 100vh;
+  height: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .main-layout {

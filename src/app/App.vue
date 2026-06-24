@@ -222,7 +222,7 @@ onUnmounted(() => {
 
 .content-area {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;

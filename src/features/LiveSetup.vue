@@ -137,6 +137,7 @@ onMounted(() => {
   padding: 1rem 2rem 2rem 2rem;
   height: 100%;
   box-sizing: border-box;
+  overflow-y: auto;
 }
 
 .glass-panel {

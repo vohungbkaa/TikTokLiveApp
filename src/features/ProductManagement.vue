@@ -175,6 +175,7 @@ onMounted(() => {
   padding: 1rem 2rem 2rem 2rem;
   height: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .glass-panel {
@@ -188,6 +189,7 @@ onMounted(() => {
   padding: 2.5rem;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .header-section {
@@ -288,9 +290,11 @@ onMounted(() => {
 .stat-card.danger .stat-value { color: #ef4444; }
 
 .table-container {
+  overflow-y: auto;
   overflow-x: auto;
   border-radius: 12px;
   border: 1px solid var(--border);
+  flex: 1;
 }
 
 .modern-table {
