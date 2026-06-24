@@ -26,10 +26,26 @@ pub async fn get_sessions(state: State<'_, DbState>) -> Result<Vec<LiveSession>,
 pub async fn start_session(
     id: String,
     state: State<'_, DbState>,
+    supervisor: State<'_, crate::connectors::supervisor::ConnectorSupervisor>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let repo = SessionRepository::new(&state.pool);
+    
+    let session_opt = repo.get(&id).await.map_err(|e| e.to_string())?;
     repo.update_status(&id, "running").await.map_err(|e| e.to_string())?;
+    
+    if let Some(session) = session_opt {
+        if let Some(url) = session.platform_session_id {
+            let mut username = url.as_str().trim_start_matches("https://www.tiktok.com/@").trim_start_matches('@');
+            username = username.split('/').next().unwrap_or(username);
+            username = username.split('?').next().unwrap_or(username);
+            
+            if !username.is_empty() {
+                tracing::info!("Starting sidecar for username: {}", username);
+                let _ = supervisor.start_connector(username, &id).await;
+            }
+        }
+    }
     
     let _ = app_handle.emit("session:started", &id);
     Ok(())
@@ -39,10 +55,13 @@ pub async fn start_session(
 pub async fn end_session(
     id: String,
     state: State<'_, DbState>,
+    supervisor: State<'_, crate::connectors::supervisor::ConnectorSupervisor>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let repo = SessionRepository::new(&state.pool);
     repo.update_status(&id, "ended").await.map_err(|e| e.to_string())?;
+    
+    let _ = supervisor.stop_connector().await;
     
     let _ = app_handle.emit("session:ended", &id);
     Ok(())
@@ -55,6 +74,15 @@ pub async fn open_session_history(
 ) -> Result<Option<LiveSession>, String> {
     let repo = SessionRepository::new(&state.pool);
     repo.get(&id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_session(
+    id: String,
+    state: State<'_, DbState>,
+) -> Result<(), String> {
+    let repo = SessionRepository::new(&state.pool);
+    repo.delete(&id).await.map_err(|e| e.to_string())
 }
 
 #[derive(serde::Deserialize)]

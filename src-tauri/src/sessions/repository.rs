@@ -95,4 +95,26 @@ impl<'a> SessionRepository<'a> {
         }
         Ok(())
     }
+
+    pub async fn delete(&self, id: &str) -> Result<(), sqlx::Error> {
+        // Also delete related records (events, orders, session_products) to maintain referential integrity
+        // Normally this would be done via CASCADE in schema, but we'll ensure it here
+        let mut tx = self.pool.begin().await?;
+        
+        sqlx::query("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE session_id = ?)")
+            .bind(id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM orders WHERE session_id = ?")
+            .bind(id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM order_claims WHERE session_id = ?")
+            .bind(id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM session_products WHERE session_id = ?")
+            .bind(id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM live_events WHERE session_id = ?")
+            .bind(id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM live_sessions WHERE id = ?")
+            .bind(id).execute(&mut *tx).await?;
+            
+        tx.commit().await?;
+        Ok(())
+    }
 }

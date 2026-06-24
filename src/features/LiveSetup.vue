@@ -33,11 +33,11 @@
               <input v-model="form.title" type="text" placeholder="VD: Khui kiện si Hàn 24/06" class="input-field"/>
             </div>
             <div class="form-group">
-              <label>Username / Link Live (Tùy chọn)</label>
+              <label>Username / Link Live (Bắt buộc)</label>
               <input v-model="form.platformSessionId" type="text" placeholder="@username hoặc link" class="input-field"/>
             </div>
             
-            <button type="submit" class="btn-primary" :disabled="loading">
+            <button type="submit" class="btn-primary" :disabled="loading || !form.platformSessionId.trim()">
               <span v-if="loading" class="spinner"></span>
               <span v-else>Khởi Tạo Phiên</span>
             </button>
@@ -59,12 +59,30 @@
                   Bắt Đầu
                 </button>
                 <button v-else class="btn-secondary">Xem Lịch Sử</button>
+                <button @click.stop.prevent="handleDeleteSession(session.id, session.title)" class="btn-delete-icon" title="Xóa phiên">
+                  <X :size="18" />
+                </button>
               </div>
             </div>
           </div>
           <div v-else class="empty-state">
             <p>Chưa có phiên live nào.</p>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm Delete Modal -->
+    <div v-if="sessionToDelete" class="modal-overlay" @click.self="sessionToDelete = null">
+      <div class="modal-content glass-panel">
+        <h3>Xóa Phiên Live</h3>
+        <p>Bạn có chắc chắn muốn xóa phiên live "<strong>{{ sessionToDelete.title || 'Không Tên' }}</strong>" không?</p>
+        <p class="text-danger">Mọi dữ liệu liên quan sẽ bị xóa sạch và không thể khôi phục.</p>
+        <div class="modal-actions">
+          <button @click="sessionToDelete = null" class="modal-btn-cancel">Hủy</button>
+          <button @click="executeDelete" class="modal-btn-danger">
+            <Trash2 :size="18" /> Xóa Vĩnh Viễn
+          </button>
         </div>
       </div>
     </div>
@@ -75,6 +93,7 @@
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { LiveSession, CreateSessionInput } from '../types/session';
+import { X, Trash2 } from 'lucide-vue-next';
 
 const sessions = ref<LiveSession[]>([]);
 const loading = ref(false);
@@ -101,6 +120,11 @@ const fetchSessions = async () => {
 };
 
 const handleCreateSession = async () => {
+  if (!form.value.platformSessionId.trim()) {
+    alert("Vui lòng nhập Username hoặc Link phiên Live!");
+    return;
+  }
+
   loading.value = true;
   try {
     const newSession = await invoke<LiveSession>('create_session', { input: form.value });
@@ -120,6 +144,26 @@ const handleStartSession = async (id: string) => {
     await fetchSessions();
   } catch (e) {
     console.error("Lỗi khi bắt đầu phiên:", e);
+  }
+};
+
+const sessionToDelete = ref<{id: string, title: string | null} | null>(null);
+
+const handleDeleteSession = (id: string, title: string | null) => {
+  sessionToDelete.value = { id, title };
+};
+
+const executeDelete = async () => {
+  if (!sessionToDelete.value) return;
+  const id = sessionToDelete.value.id;
+  
+  try {
+    await invoke('delete_session', { id });
+    await fetchSessions();
+    sessionToDelete.value = null;
+  } catch (e) {
+    console.error("Lỗi khi xóa phiên:", e);
+    alert(`Có lỗi xảy ra khi xóa phiên: ${e}`);
   }
 };
 
@@ -363,6 +407,12 @@ onMounted(() => {
   margin: 0.5rem 0 0 0;
 }
 
+.session-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .btn-start {
   background: #22c55e;
   color: white;
@@ -388,11 +438,134 @@ onMounted(() => {
   cursor: pointer;
 }
 
+.btn-delete-icon {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateX(10px);
+  transition: all 0.2s ease;
+}
+
+.session-card:hover .btn-delete-icon {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.btn-delete-icon:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
 .empty-state {
   text-align: center;
   color: var(--text-muted);
   padding: 3rem 0;
   border: 1px dashed var(--border);
   border-radius: 16px;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2rem;
+  max-width: 400px;
+  width: 90%;
+  border-radius: 20px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  color: var(--text-main);
+}
+
+.text-danger {
+  color: #ef4444;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.modal-btn-cancel {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  padding: 0.8rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.modal-btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, #f87171, #ef4444);
+}
+
+.modal-btn-danger:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 </style>

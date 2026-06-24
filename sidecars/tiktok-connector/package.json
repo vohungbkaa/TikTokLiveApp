@@ -5,7 +5,7 @@
   "bin": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "build:sidecar": "tsc && pkg . -t node18-macos-x64,node18-win-x64,node18-linux-x64 --out-path ../../src-tauri/bin",
+    "build:sidecar": "tsc && pkg . -t node18-macos-x64,node18-win-x64,node18-linux-x64 --out-path ../../src-tauri/bin && node scripts/rename-binaries.js",
     "start": "ts-node src/index.ts"
   },
   "keywords": [],
