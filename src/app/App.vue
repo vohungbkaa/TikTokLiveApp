@@ -11,7 +11,7 @@
           active-class="active"
         >
           <span class="item-text">{{ item.name }}</span>
-          <svg class="drag-handle" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg @click.prevent class="drag-handle" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/>
           </svg>
         </router-link>
@@ -23,15 +23,23 @@
       <header class="top-bar">
         <div class="user-menu-container" ref="menuContainer">
           <button class="avatar-btn" @click="toggleMenu" title="Tài khoản">
-            <span class="icon">👤</span>
+            <User :size="20" />
           </button>
           
           <div class="dropdown-menu" v-if="isMenuOpen">
-            <div class="dropdown-item" @click="goToSettings">
-              <span class="icon">⚙️</span> Cài đặt
+            <div class="dropdown-header">
+              <div class="user-info">
+                <span class="user-name">Admin</span>
+                <span class="user-role">Shop Manager</span>
+              </div>
             </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" @click="goToSettings">
+              <Settings class="icon" :size="18" /> Cài đặt
+            </div>
+            <div class="dropdown-divider"></div>
             <div class="dropdown-item text-danger" @click="handleLogout">
-              <span class="icon">🚪</span> Đăng xuất
+              <LogOut class="icon" :size="18" /> Đăng xuất
             </div>
           </div>
         </div>
@@ -49,6 +57,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLocalStorage } from '@vueuse/core';
 import Sortable from 'sortablejs';
+import { Settings, LogOut, User } from 'lucide-vue-next';
 
 const router = useRouter();
 const isMenuOpen = ref(false);
@@ -86,16 +95,24 @@ const handleClickOutside = (event: MouseEvent) => {
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
   
-  // Initialize drag and drop
   if (menuRef.value) {
     Sortable.create(menuRef.value, {
       animation: 150,
       ghostClass: 'sortable-ghost',
       handle: '.drag-handle',
+      forceFallback: true,
+      fallbackOnBody: true,
       onEnd: (evt) => {
         const oldIndex = evt.oldIndex;
         const newIndex = evt.newIndex;
-        if (oldIndex !== undefined && newIndex !== undefined) {
+        if (oldIndex !== undefined && newIndex !== undefined && oldIndex !== newIndex) {
+          // Revert DOM mutation so Vue doesn't throw patching errors
+          const itemEl = evt.item;
+          const parentEl = evt.from;
+          const sibling = parentEl.children[oldIndex < newIndex ? oldIndex : oldIndex + 1];
+          parentEl.insertBefore(itemEl, sibling || null);
+
+          // Update Vue state
           const items = [...menuItems.value];
           const [movedItem] = items.splice(oldIndex, 1);
           items.splice(newIndex, 0, movedItem);
@@ -256,15 +273,17 @@ onUnmounted(() => {
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  width: 200px;
-  background: rgba(15, 23, 42, 0.9);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  width: 220px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
   padding: 0.5rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-  animation: slideDown 0.2s ease-out forwards;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   transform-origin: top right;
+  z-index: 9999;
 }
 
 @keyframes slideDown {
@@ -272,32 +291,62 @@ onUnmounted(() => {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+.dropdown-header {
+  padding: 0.8rem 1rem;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.user-name {
+  font-weight: 600;
+  color: var(--text-main);
+  font-size: 0.95rem;
+}
+
+.user-role {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1) 10%, rgba(255, 255, 255, 0.1) 90%, transparent);
+  margin: 0.25rem 0;
+}
+
 .dropdown-item {
   display: flex;
   align-items: center;
   gap: 0.8rem;
   padding: 0.8rem 1rem;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   color: var(--text-main);
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(2px);
 }
 
 .dropdown-item .icon {
   font-size: 1.1rem;
+  opacity: 0.8;
 }
 
 .text-danger {
-  color: #f87171 !important;
+  color: #fb7185 !important;
 }
 
 .text-danger:hover {
-  background: rgba(239, 68, 68, 0.15) !important;
+  background: rgba(251, 113, 133, 0.1) !important;
+  color: #f43f5e !important;
 }
 
 
