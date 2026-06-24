@@ -123,6 +123,7 @@ const getConfidenceColor = (score: number) => {
 .parser-debug {
   padding: 1rem 2rem 2rem 2rem;
   display: flex;
+  justify-content: center;
   height: 100%;
   box-sizing: border-box;
 }
@@ -133,6 +134,7 @@ const getConfidenceColor = (score: number) => {
   border: 1px solid var(--border);
   border-radius: 24px;
   width: 100%;
+  max-width: 1000px;
   padding: 2.5rem;
   display: flex;
   flex-direction: column;

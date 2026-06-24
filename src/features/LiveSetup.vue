@@ -133,6 +133,7 @@ onMounted(() => {
 <style scoped>
 .live-setup-container {
   display: flex;
+  justify-content: center;
   padding: 1rem 2rem 2rem 2rem;
   height: 100%;
   box-sizing: border-box;
@@ -144,6 +145,7 @@ onMounted(() => {
   border: 1px solid var(--border);
   border-radius: 24px;
   width: 100%;
+  max-width: 1000px;
   padding: 2.5rem;
   display: flex;
   flex-direction: column;
