@@ -22,20 +22,18 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let handle = app.handle().clone();
-            
-            tauri::async_runtime::spawn(async move {
-                match db::init_db(&handle).await {
-                    Ok(pool) => {
-                        let supervisor = connectors::supervisor::ConnectorSupervisor::new(handle.clone(), pool.clone());
-                        handle.manage(supervisor);
-                        handle.manage(db::DbState { pool });
-                        tracing::info!("Database initialized and state managed.");
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to initialize database: {}", e);
-                    }
-                }
-            });
+
+            let pool = tauri::async_runtime::block_on(async { db::init_db(&handle).await })
+                .map_err(|e| {
+                    tracing::error!("Failed to initialize database: {}", e);
+                    format!("Failed to initialize database: {e}")
+                })?;
+
+            let supervisor =
+                connectors::supervisor::ConnectorSupervisor::new(handle.clone(), pool.clone());
+            handle.manage(supervisor);
+            handle.manage(db::DbState { pool });
+            tracing::info!("Database initialized and state managed.");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -48,6 +46,9 @@ pub fn run() {
             commands::session::delete_session,
             commands::session::open_session_history,
             commands::session::set_session_products,
+            commands::connector::get_connector_status,
+            commands::connector::get_connector_debug_logs,
+            commands::connector::ensure_live_connector,
             commands::product::list_products,
             commands::product::create_product,
             commands::product::update_stock,

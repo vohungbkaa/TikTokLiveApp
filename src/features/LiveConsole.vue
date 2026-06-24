@@ -11,10 +11,33 @@
           <h2 v-else>Chưa có phiên live đang chạy</h2>
           <p class="muted" v-if="activeSession">
             @{{ liveUsername }} · {{ activeSession.status }}
+            <span v-if="connectorSnapshot">
+              · {{ connectorSnapshot.processAlive ? 'process ok' : 'process dead' }}
+              · stdout={{ connectorSnapshot.stdoutLines ?? 0 }}
+              · events={{ connectorSnapshot.eventCount ?? 0 }}
+            </span>
           </p>
+          <button
+            v-if="activeSession && connectorStatus === 'connecting'"
+            class="btn-retry"
+            @click="retryConnector"
+          >
+            Thử kết nối lại
+          </button>
           <p class="muted" v-else>
             Vào tab "Cấu Hình Live" để tạo và bắt đầu phiên.
           </p>
+        </div>
+
+        <div v-if="debugLogs.length > 0" class="glass-panel debug-panel">
+          <div class="debug-header">Connector Debug Log</div>
+          <div class="debug-lines">
+            <div v-for="(line, idx) in debugLogs.slice(-12)" :key="idx" class="debug-line">
+              <span class="debug-ts">{{ formatLogTime(line.ts) }}</span>
+              <span class="debug-level" :class="line.level">{{ line.level }}</span>
+              <span class="debug-msg">{{ line.message }}</span>
+            </div>
+          </div>
         </div>
 
         <div class="stats-cards">
@@ -71,13 +94,18 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import type { LiveEvent } from '../types/live-event';
 import type { LiveSession } from '../types/session';
+import type { ConnectorSnapshot, DebugLogEntry } from '../types/connector';
 
 const events = ref<LiveEvent[]>([]);
 const activeSession = ref<LiveSession | null>(null);
 const connectorStatus = ref<'connected' | 'connecting' | 'disconnected'>('disconnected');
+const connectorStage = ref<string | null>(null);
+const connectorSnapshot = ref<ConnectorSnapshot | null>(null);
+const debugLogs = ref<DebugLogEntry[]>([]);
 const chatStreamRef = ref<HTMLElement | null>(null);
 const mockComment = ref('');
 const unlisteners: Array<() => void> = [];
+let statusPollTimer: number | null = null;
 
 const liveUsername = computed(() => {
   const raw = activeSession.value?.platformSessionId || '';
@@ -87,9 +115,48 @@ const liveUsername = computed(() => {
 const statusLabel = computed(() => {
   if (!activeSession.value) return 'Chưa kết nối';
   if (connectorStatus.value === 'connected') return 'Đang Phát Trực Tiếp';
-  if (connectorStatus.value === 'connecting') return 'Đang kết nối...';
+  if (connectorStatus.value === 'connecting') {
+    return connectorStage.value ? `Đang kết nối (${connectorStage.value})...` : 'Đang kết nối...';
+  }
   return 'Mất kết nối';
 });
+
+const applyConnectorSnapshot = (snapshot: ConnectorSnapshot) => {
+  connectorSnapshot.value = snapshot;
+  connectorStage.value = snapshot.stage ?? null;
+  if (snapshot.status === 'connected') connectorStatus.value = 'connected';
+  else if (snapshot.status === 'connecting' || snapshot.status === 'idle') connectorStatus.value = 'connecting';
+  else if (snapshot.status === 'error') connectorStatus.value = 'disconnected';
+  else connectorStatus.value = 'disconnected';
+};
+
+const formatLogTime = (ts: string) => new Date(ts).toLocaleTimeString('vi-VN');
+
+const appendDebugLog = (entry: DebugLogEntry) => {
+  debugLogs.value.push(entry);
+  if (debugLogs.value.length > 50) debugLogs.value.shift();
+};
+
+const refreshConnectorStatus = async () => {
+  if (!activeSession.value) return;
+  try {
+    const snapshot = await invoke<ConnectorSnapshot>('get_connector_status');
+    applyConnectorSnapshot(snapshot);
+    if (snapshot.status !== 'connected' && snapshot.status !== 'down') {
+      console.log('[LiveConsole] poll status', snapshot);
+    }
+  } catch (e) {
+    console.error('[LiveConsole] poll status failed', e);
+  }
+};
+
+const startStatusPolling = () => {
+  if (statusPollTimer) clearInterval(statusPollTimer);
+  statusPollTimer = window.setInterval(async () => {
+    if (connectorStatus.value === 'connected') return;
+    await refreshConnectorStatus();
+  }, 3000);
+};
 
 const buffer: LiveEvent[] = [];
 let flushTimeout: number | null = null;
@@ -110,6 +177,8 @@ const flushBuffer = () => {
 
 const handleNewEvent = (event: LiveEvent) => {
   if (activeSession.value && event.sessionId !== activeSession.value.id) return;
+  connectorStatus.value = 'connected';
+  connectorStage.value = 'connected';
   buffer.push(event);
   if (!flushTimeout) {
     flushTimeout = window.setTimeout(flushBuffer, 100);
@@ -118,17 +187,32 @@ const handleNewEvent = (event: LiveEvent) => {
 
 const loadRunningSession = async () => {
   try {
+    console.log('[LiveConsole] loadRunningSession');
     const sessions = await invoke<LiveSession[]>('get_sessions');
     const running = sessions.find((s) => s.status === 'running') || null;
     activeSession.value = running;
 
+    const logs = await invoke<DebugLogEntry[]>('get_connector_debug_logs');
+    debugLogs.value = logs;
+
     if (running) {
       connectorStatus.value = 'connecting';
+      console.log('[LiveConsole] ensure_live_connector', running.id);
+      const snapshot = await invoke<ConnectorSnapshot>('ensure_live_connector', {
+        sessionId: running.id,
+      });
+      console.log('[LiveConsole] ensure result', snapshot);
+      applyConnectorSnapshot(snapshot);
+
       const history = await invoke<LiveEvent[]>('get_session_events', {
         sessionId: running.id,
         limit: 500,
       });
       events.value = history;
+      if (history.length > 0) {
+        connectorStatus.value = 'connected';
+        connectorStage.value = 'connected';
+      }
       nextTick(() => {
         if (chatStreamRef.value) {
           chatStreamRef.value.scrollTop = chatStreamRef.value.scrollHeight;
@@ -139,13 +223,35 @@ const loadRunningSession = async () => {
       connectorStatus.value = 'disconnected';
     }
   } catch (e) {
-    console.error('Lỗi khi tải phiên live:', e);
+    console.error('[LiveConsole] loadRunningSession failed', e);
+    appendDebugLog({
+      ts: new Date().toISOString(),
+      level: 'error',
+      message: `loadRunningSession: ${String(e)}`,
+    });
   }
 };
 
-onMounted(async () => {
-  await loadRunningSession();
+const retryConnector = async () => {
+  if (!activeSession.value) return;
+  connectorStatus.value = 'connecting';
+  try {
+    const snapshot = await invoke<ConnectorSnapshot>('ensure_live_connector', {
+      sessionId: activeSession.value.id,
+      force: true,
+    });
+    applyConnectorSnapshot(snapshot);
+  } catch (e) {
+    console.error('[LiveConsole] retryConnector failed', e);
+    appendDebugLog({
+      ts: new Date().toISOString(),
+      level: 'error',
+      message: `retryConnector: ${String(e)}`,
+    });
+  }
+};
 
+const setupEventListeners = async () => {
   unlisteners.push(
     await listen<LiveEvent>('live_event_received', (event) => {
       handleNewEvent(event.payload);
@@ -159,11 +265,27 @@ onMounted(async () => {
   );
 
   unlisteners.push(
+    await listen<ConnectorSnapshot>('connector:snapshot', (event) => {
+      applyConnectorSnapshot(event.payload);
+    })
+  );
+
+  unlisteners.push(
     await listen<{ stage?: string; ok?: boolean }>('connector:health', (event) => {
       const stage = event.payload.stage;
+      connectorStage.value = stage ?? null;
       if (stage === 'connected') connectorStatus.value = 'connected';
-      else if (stage === 'connecting' || stage === 'reconnecting') connectorStatus.value = 'connecting';
-      else if (stage === 'disconnected' || stage === 'stream_ended') connectorStatus.value = 'disconnected';
+      else if (stage === 'connecting' || stage === 'reconnecting' || stage === 'room_resolve') {
+        connectorStatus.value = 'connecting';
+      } else if (stage === 'disconnected' || stage === 'stream_ended') {
+        connectorStatus.value = 'disconnected';
+      }
+    })
+  );
+
+  unlisteners.push(
+    await listen<DebugLogEntry>('connector:debug', (event) => {
+      appendDebugLog(event.payload);
     })
   );
 
@@ -172,11 +294,18 @@ onMounted(async () => {
       connectorStatus.value = 'disconnected';
     })
   );
+};
+
+onMounted(async () => {
+  await setupEventListeners();
+  await loadRunningSession();
+  startStatusPolling();
 });
 
 onUnmounted(() => {
   unlisteners.forEach((fn) => fn());
   if (flushTimeout) clearTimeout(flushTimeout);
+  if (statusPollTimer) clearInterval(statusPollTimer);
 });
 
 const sendMockComment = async () => {
@@ -282,6 +411,56 @@ const sendMockComment = async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
+}
+
+.debug-panel {
+  padding: 0.75rem 1rem;
+  max-height: 160px;
+  overflow: hidden;
+}
+
+.debug-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.debug-lines {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.debug-line {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.debug-ts { color: #64748b; flex-shrink: 0; }
+.debug-level { flex-shrink: 0; width: 42px; text-transform: uppercase; }
+.debug-level.info { color: #60a5fa; }
+.debug-level.warn { color: #fbbf24; }
+.debug-level.error { color: #f87171; }
+.debug-msg { color: #cbd5e1; word-break: break-word; }
+
+.btn-retry {
+  margin-top: 0.75rem;
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 0.45rem 1rem;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-retry:hover {
+  background: rgba(245, 158, 11, 0.25);
 }
 
 .stat-card {

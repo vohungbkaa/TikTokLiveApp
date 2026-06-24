@@ -80151,15 +80151,23 @@ __decorate([HandleError("Failed to fetch room gifts.")], TikTokLiveConnection.pr
 __decorate([HandleError("Failed to send message.")], TikTokLiveConnection.prototype, "sendMessage", null);
 
 // src/protocol.ts
+var stdoutHandle = process.stdout._handle;
+if (stdoutHandle?.setBlocking) {
+  stdoutHandle.setBlocking(true);
+}
+function emitLine(payload) {
+  process.stdout.write(`${JSON.stringify(payload)}
+`);
+}
 function emitHealth(stage, ok) {
-  console.log(JSON.stringify({ type: "health", stage, ok }));
+  emitLine({ type: "health", stage, ok });
 }
 function emitError(stage, code, message) {
-  console.log(JSON.stringify({ type: "error", stage, code, message }));
+  emitLine({ type: "error", stage, code, message });
   console.error(`[ERROR][${stage}][${code}] ${message}`);
 }
 function emitEvent(event_type, data) {
-  console.log(JSON.stringify({ type: "event", event_type, data }));
+  emitLine({ type: "event", event_type, data });
 }
 
 // src/mappers.ts

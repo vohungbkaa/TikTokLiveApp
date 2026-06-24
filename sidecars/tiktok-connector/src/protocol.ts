@@ -17,16 +17,25 @@ export interface EventMessage {
     data: any;
 }
 
+// Node buffers stdout when piped (Tauri shell). Force immediate flush per line.
+const stdoutHandle = (process.stdout as NodeJS.WriteStream & { _handle?: { setBlocking?: (blocking: boolean) => void } })._handle;
+if (stdoutHandle?.setBlocking) {
+    stdoutHandle.setBlocking(true);
+}
+
+function emitLine(payload: object) {
+    process.stdout.write(`${JSON.stringify(payload)}\n`);
+}
+
 export function emitHealth(stage: string, ok: boolean) {
-    console.log(JSON.stringify({ type: "health", stage, ok }));
+    emitLine({ type: "health", stage, ok });
 }
 
 export function emitError(stage: string, code: string, message: string) {
-    console.log(JSON.stringify({ type: "error", stage, code, message }));
-    // Also write to stderr for debugging
+    emitLine({ type: "error", stage, code, message });
     console.error(`[ERROR][${stage}][${code}] ${message}`);
 }
 
 export function emitEvent(event_type: string, data: any) {
-    console.log(JSON.stringify({ type: "event", event_type, data }));
+    emitLine({ type: "event", event_type, data });
 }

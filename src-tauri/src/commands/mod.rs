@@ -1,4 +1,5 @@
 pub mod app;
+pub mod connector;
 pub mod customer;
 pub mod event;
 pub mod order;

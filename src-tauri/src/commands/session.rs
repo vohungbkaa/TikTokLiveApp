@@ -3,6 +3,22 @@ use crate::db::DbState;
 use crate::sessions::models::{LiveSession, CreateSessionInput};
 use crate::sessions::repository::SessionRepository;
 
+fn parse_tiktok_username(platform_session_id: &str) -> Option<&str> {
+    let mut username = platform_session_id
+        .trim()
+        .trim_start_matches("https://www.tiktok.com/@")
+        .trim_start_matches("https://tiktok.com/@")
+        .trim_start_matches('@');
+    username = username.split('/').next().unwrap_or(username);
+    username = username.split('?').next().unwrap_or(username);
+    let username = username.trim();
+    if username.is_empty() {
+        None
+    } else {
+        Some(username)
+    }
+}
+
 #[tauri::command]
 pub async fn create_session(
     input: CreateSessionInput,
@@ -36,13 +52,14 @@ pub async fn start_session(
     
     if let Some(session) = session_opt {
         if let Some(url) = session.platform_session_id {
-            let mut username = url.as_str().trim_start_matches("https://www.tiktok.com/@").trim_start_matches('@');
-            username = username.split('/').next().unwrap_or(username);
-            username = username.split('?').next().unwrap_or(username);
-            
-            if !username.is_empty() {
+            if let Some(username) = parse_tiktok_username(&url) {
                 tracing::info!("Starting sidecar for username: {}", username);
-                let _ = supervisor.start_connector(username, &id).await;
+                if let Err(err) = supervisor.start_connector(username, &id).await {
+                    tracing::error!("Failed to start sidecar: {}", err);
+                    return Err(err);
+                }
+            } else {
+                return Err("Invalid TikTok username".to_string());
             }
         }
     }
