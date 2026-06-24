@@ -33,7 +33,13 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app::app_health_check,
-            db::backup_db
+            db::backup_db,
+            commands::session::create_session,
+            commands::session::get_sessions,
+            commands::session::start_session,
+            commands::session::end_session,
+            commands::session::open_session_history,
+            commands::session::set_session_products
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
