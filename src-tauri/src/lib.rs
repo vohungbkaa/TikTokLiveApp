@@ -5,6 +5,7 @@ pub mod connectors;
 pub mod db;
 pub mod diagnostics;
 pub mod events;
+pub mod inventory;
 pub mod orders;
 pub mod parser;
 pub mod products;
@@ -15,6 +16,7 @@ pub fn run() {
     diagnostics::logging::init_logger();
     
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let handle = app.handle().clone();
@@ -39,7 +41,12 @@ pub fn run() {
             commands::session::start_session,
             commands::session::end_session,
             commands::session::open_session_history,
-            commands::session::set_session_products
+            commands::session::set_session_products,
+            commands::product::list_products,
+            commands::product::create_product,
+            commands::product::update_stock,
+            commands::event::test_ingest_event,
+            commands::parser::debug_parse_comment
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

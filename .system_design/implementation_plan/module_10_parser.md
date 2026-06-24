@@ -133,7 +133,7 @@ Hiểu comment mua hàng và trích xuất intent, SKU, variant, số lượng.
 - File/thư mục dự kiến: `src-tauri/src/commands/parser.rs`.
 - Dependency: M10-T08.
 - Output: command `debug_parse_comment`.
-- Done khi: nhập comment trả normalized/matched rule/output.
+- Done khi: truy cập từ mục "Cài đặt" -> "Công cụ nâng cao" -> màn hình test cú pháp hoạt động chuẩn.
 
 ## Done khi
 

@@ -17,8 +17,8 @@ pub async fn run_in_transaction<F, Fut, T, E>(
     operation: F,
 ) -> Result<T, E>
 where
-    F: FnOnce(Transaction<'_, Sqlite>) -> Fut,
-    Fut: std::future::Future<Output = Result<(T, Transaction<'_, Sqlite>), E>>,
+    F: FnOnce(Transaction<'static, Sqlite>) -> Fut,
+    Fut: std::future::Future<Output = Result<(T, Transaction<'static, Sqlite>), E>>,
     E: From<sqlx::Error>,
 {
     let mut tx = pool.begin().await?;
