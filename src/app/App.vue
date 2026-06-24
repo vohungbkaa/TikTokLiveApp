@@ -107,10 +107,10 @@ onUnmounted(() => {
 }
 
 .nav-item {
-  padding: 0.8rem 1rem;
-  border-radius: 12px;
-  color: var(--text-muted);
   text-decoration: none;
+  color: var(--text-muted);
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
   font-weight: 500;
   transition: all 0.2s;
 }
@@ -121,8 +121,10 @@ onUnmounted(() => {
 }
 
 .nav-item.active {
-  background: rgba(167, 139, 250, 0.15);
-  color: #a78bfa;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary);
+  font-weight: 600;
+  border-left: 3px solid var(--primary);
 }
 
 
