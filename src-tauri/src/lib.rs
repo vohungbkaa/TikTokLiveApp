@@ -1,3 +1,5 @@
+use tauri::Manager;
+
 pub mod commands;
 pub mod connectors;
 pub mod db;
@@ -14,8 +16,24 @@ pub fn run() {
     
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match db::init_db(&handle).await {
+                    Ok(pool) => {
+                        handle.manage(db::DbState { pool });
+                        tracing::info!("Database initialized and state managed.");
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to initialize database: {}", e);
+                    }
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
-            commands::app::app_health_check
+            commands::app::app_health_check,
+            db::backup_db
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
