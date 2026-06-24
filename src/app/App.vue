@@ -2,11 +2,16 @@
   <div class="app-layout">
     <aside class="sidebar glass-panel-nav">
       <div class="logo">🚀 OfMe Live</div>
-      <nav class="nav-menu">
-        <router-link to="/products" class="nav-item" active-class="active">Kho Hàng</router-link>
-        <router-link to="/live-setup" class="nav-item" active-class="active">Cấu Hình Live</router-link>
-        <router-link to="/live-console" class="nav-item" active-class="active">Màn Hình Live</router-link>
-        <router-link to="/order-review" class="nav-item" active-class="active">Đơn Hàng</router-link>
+      <nav class="nav-menu" ref="menuRef">
+        <router-link 
+          v-for="item in menuItems" 
+          :key="item.id" 
+          :to="item.path" 
+          class="nav-item" 
+          active-class="active"
+        >
+          {{ item.name }}
+        </router-link>
       </nav>
       
     </aside>
@@ -39,10 +44,20 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useLocalStorage } from '@vueuse/core';
+import Sortable from 'sortablejs';
 
 const router = useRouter();
 const isMenuOpen = ref(false);
 const menuContainer = ref<HTMLElement | null>(null);
+const menuRef = ref<HTMLElement | null>(null);
+
+const menuItems = useLocalStorage('app-menu-order', [
+  { id: 'products', name: 'Kho Hàng', path: '/products' },
+  { id: 'setup', name: 'Cấu Hình Live', path: '/live-setup' },
+  { id: 'console', name: 'Màn Hình Live', path: '/live-console' },
+  { id: 'orders', name: 'Đơn Hàng', path: '/order-review' }
+]);
 
 const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value;
@@ -67,6 +82,24 @@ const handleClickOutside = (event: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
+  
+  // Initialize drag and drop
+  if (menuRef.value) {
+    Sortable.create(menuRef.value, {
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      onEnd: (evt) => {
+        const oldIndex = evt.oldIndex;
+        const newIndex = evt.newIndex;
+        if (oldIndex !== undefined && newIndex !== undefined) {
+          const items = [...menuItems.value];
+          const [movedItem] = items.splice(oldIndex, 1);
+          items.splice(newIndex, 0, movedItem);
+          menuItems.value = items;
+        }
+      }
+    });
+  }
 });
 
 onUnmounted(() => {
@@ -113,6 +146,17 @@ onUnmounted(() => {
   border-radius: 12px;
   font-weight: 500;
   transition: all 0.2s;
+  cursor: grab;
+}
+
+.nav-item:active {
+  cursor: grabbing;
+}
+
+.sortable-ghost {
+  opacity: 0.4;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px dashed rgba(255, 255, 255, 0.3);
 }
 
 .nav-item:hover {
