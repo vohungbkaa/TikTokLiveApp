@@ -61,6 +61,7 @@
 <script setup lang="ts">
 import { invoke } from '@tauri-apps/api/core';
 import { useLiveViewerPrefs } from '../composables/useLiveViewerPrefs';
+import { closeEmbeddedLive } from '../utils/tiktokLiveEmbed';
 
 const { prefs, setWatchLiveEnabled } = useLiveViewerPrefs();
 
@@ -69,9 +70,10 @@ const onWatchToggle = async (event: Event) => {
   setWatchLiveEnabled(enabled);
   if (!enabled) {
     try {
+      await closeEmbeddedLive();
       await invoke('close_live_viewer');
     } catch (e) {
-      console.error('[Settings] close_live_viewer failed', e);
+      console.error('[Settings] close live viewer failed', e);
     }
   }
 };

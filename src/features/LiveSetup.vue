@@ -66,7 +66,7 @@
                   Bắt Đầu
                 </button>
                 <button v-else class="btn-secondary">Xem Lịch Sử</button>
-                <button @click.stop.prevent="handleDeleteSession(session.id, session.title)" class="btn-delete-icon" title="Xóa phiên">
+                <button @click.stop.prevent="handleDeleteSession(session.id, session.title ?? null)" class="btn-delete-icon" title="Xóa phiên">
                   <X :size="18" />
                 </button>
               </div>
@@ -134,7 +134,7 @@ const errors = ref({
 });
 
 const handleCreateSession = async () => {
-  if (!form.value.platformSessionId.trim()) {
+  if (!form.value.platformSessionId || !form.value.platformSessionId.trim()) {
     errors.value.platformSessionId = true;
     return;
   }

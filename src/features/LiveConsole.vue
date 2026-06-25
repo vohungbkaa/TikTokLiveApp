@@ -101,12 +101,9 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import LiveViewerPanel from '../components/LiveViewerPanel.vue';
-import { useLiveViewerPrefs } from '../composables/useLiveViewerPrefs';
 import type { LiveEvent } from '../types/live-event';
 import type { LiveSession } from '../types/session';
 import type { ConnectorSnapshot, DebugLogEntry } from '../types/connector';
-
-const { prefs: liveViewerPrefs } = useLiveViewerPrefs();
 
 const events = ref<LiveEvent[]>([]);
 const activeSession = ref<LiveSession | null>(null);
@@ -230,8 +227,6 @@ const loadRunningSession = async () => {
           chatStreamRef.value.scrollTop = chatStreamRef.value.scrollHeight;
         }
       });
-
-      await maybeAutoOpenLive();
     } else {
       events.value = [];
       connectorStatus.value = 'disconnected';
@@ -243,24 +238,6 @@ const loadRunningSession = async () => {
       level: 'error',
       message: `loadRunningSession: ${String(e)}`,
     });
-  }
-};
-
-const maybeAutoOpenLive = async () => {
-  if (
-    !activeSession.value ||
-    !liveViewerPrefs.value.watchLiveEnabled ||
-    !liveViewerPrefs.value.autoOpenOnSessionStart
-  ) {
-    return;
-  }
-  try {
-    await invoke('open_live_viewer', {
-      username: liveUsername.value,
-      loginFirst: false,
-    });
-  } catch (e) {
-    console.error('[LiveConsole] auto open live failed', e);
   }
 };
 
@@ -405,9 +382,9 @@ const sendMockComment = async () => {
 }
 
 .video-placeholder {
-  flex: 1;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: 0.75rem;
   position: relative;
   padding: 1rem;

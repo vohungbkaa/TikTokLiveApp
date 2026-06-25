@@ -8,6 +8,10 @@
         </div>
         <span class="switch-text">Bật xem hình Live</span>
       </label>
+      <label v-if="prefs.watchLiveEnabled" class="checkbox-option" style="margin-left: 1rem; border: none; background: transparent; padding: 0;">
+        <input type="checkbox" v-model="prefs.autoOpenOnSessionStart" class="custom-checkbox" />
+        <span>Tự động mở khi tạo phiên</span>
+      </label>
     </div>
 
     <div v-if="!prefs.watchLiveEnabled" class="state-off">
@@ -18,27 +22,32 @@
     </div>
 
     <div v-else class="state-on">
-      <label class="checkbox-option">
-        <input type="checkbox" v-model="prefs.autoOpenOnSessionStart" class="custom-checkbox" />
-        <span>Tự động bật cửa sổ khi tạo phiên mới</span>
-      </label>
+      <div v-if="errorMessage" class="error-banner">
+        <p><strong>Lỗi mở khung Live:</strong> {{ errorMessage }}</p>
+      </div>
 
-      <div class="info-card">
-        <p class="info-desc">
-          Bạn có thể đăng nhập bằng <strong>bất kỳ tài khoản TikTok nào</strong> để xem.
-          Hệ thống sẽ tự động điều hướng tới luồng live của <strong>@{{ username }}</strong>.
-        </p>
+      <div ref="mountRef" class="embed-mount">
+        <div v-if="!embedActive" class="embed-placeholder">
+          <div class="state-icon-bg-small">
+            <MonitorPlay :size="24" class="icon-accent" />
+          </div>
+          <p class="preview-title">Live hiển thị ngay tại khung này</p>
+          <p class="preview-desc">
+            Đăng nhập bằng <strong>bất kỳ tài khoản TikTok nào</strong>. Khi đăng nhập xong, app mở thẳng
+            <strong>@{{ username }}</strong>.
+          </p>
+        </div>
       </div>
 
       <div class="action-grid">
-        <button class="btn-action primary" :disabled="!username" @click="loginAndWatch">
-          <LogIn :size="18" /> Đăng nhập & Xem
+        <button class="btn-action primary" type="button" :disabled="!username || opening" @click="loginAndWatch">
+          <LogIn :size="18" /> {{ opening ? 'Đang mở...' : 'Đăng nhập & Xem' }}
         </button>
-        <button class="btn-action secondary" :disabled="!username" @click="watchDirect">
+        <button class="btn-action secondary" type="button" :disabled="!username || opening" @click="watchDirect">
           <ExternalLink :size="18" /> Xem ngay (Đã đăng nhập)
         </button>
-        <button class="btn-action danger-ghost" @click="closeViewer">
-          <XCircle :size="18" /> Đóng cửa sổ live
+        <button v-if="embedActive" class="btn-action danger-ghost" type="button" @click="closeEmbed">
+          <XCircle :size="18" /> Ẩn cửa sổ live
         </button>
       </div>
     </div>
@@ -46,53 +55,75 @@
 </template>
 
 <script setup lang="ts">
-import { invoke } from '@tauri-apps/api/core';
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useLiveViewerPrefs } from '../composables/useLiveViewerPrefs';
+import { closeEmbeddedLive, isEmbeddedLiveOpen, openEmbeddedLive } from '../utils/tiktokLiveEmbed';
 import { MonitorPlay, LogIn, ExternalLink, XCircle } from 'lucide-vue-next';
 
 const props = defineProps<{
   username: string;
 }>();
 
-const emit = defineEmits<{
-  (e: 'watch-opened'): void;
-}>();
-
 const { prefs, setWatchLiveEnabled } = useLiveViewerPrefs();
+const mountRef = ref<HTMLElement | null>(null);
+const embedActive = ref(false);
+const opening = ref(false);
+const errorMessage = ref('');
 
-const openViewer = async (loginFirst: boolean) => {
-  if (!props.username) return;
+const openEmbed = async (loginFirst: boolean) => {
+  if (!props.username || !mountRef.value) return;
+  opening.value = true;
+  errorMessage.value = '';
   try {
-    await invoke('open_live_viewer', {
-      username: props.username,
-      loginFirst,
-    });
-    emit('watch-opened');
-  } catch (e) {
-    console.error('[LiveViewerPanel] open_live_viewer failed', e);
+    await openEmbeddedLive(mountRef.value, props.username, loginFirst);
+    embedActive.value = true;
+  } catch (e: any) {
+    console.error('[LiveViewerPanel] openEmbeddedLive failed', e);
+    errorMessage.value = String(e.message || e);
+  } finally {
+    opening.value = false;
   }
 };
 
-const loginAndWatch = () => openViewer(true);
-const watchDirect = () => openViewer(false);
+const loginAndWatch = () => openEmbed(true);
+const watchDirect = () => openEmbed(false);
+
+const closeEmbed = async () => {
+  await closeEmbeddedLive();
+  embedActive.value = false;
+};
 
 const onToggleWatch = async (event: Event) => {
   const enabled = (event.target as HTMLInputElement).checked;
   setWatchLiveEnabled(enabled);
   if (!enabled) {
-    await closeViewer();
+    await closeEmbed();
   }
 };
 
-const closeViewer = async () => {
-  try {
-    await invoke('close_live_viewer');
-  } catch (e) {
-    console.error('[LiveViewerPanel] close_live_viewer failed', e);
-  }
+const maybeAutoOpen = async () => {
+  if (!props.username || !prefs.value.watchLiveEnabled || !prefs.value.autoOpenOnSessionStart) return;
+  await nextTick();
+  await openEmbed(false);
 };
 
-defineExpose({ loginAndWatch, watchDirect, closeViewer });
+watch(
+  () => props.username,
+  () => {
+    void maybeAutoOpen();
+  },
+);
+
+onMounted(async () => {
+  embedActive.value = await isEmbeddedLiveOpen();
+  await maybeAutoOpen();
+});
+
+onUnmounted(() => {
+  void closeEmbeddedLive();
+});
+
+defineExpose({ loginAndWatch, watchDirect, closeEmbed, maybeAutoOpen });
 </script>
 
 <style scoped>
@@ -100,13 +131,13 @@ defineExpose({ loginAndWatch, watchDirect, closeViewer });
   display: flex;
   flex-direction: column;
   flex: 1;
-  padding: 1rem;
-  padding-top: 1.5rem;
+  padding-top: 0.5rem;
 }
 
 .viewer-toggle-row {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   margin-bottom: 2rem;
   padding-right: 0.5rem;
 }
@@ -123,6 +154,20 @@ defineExpose({ loginAndWatch, watchDirect, closeViewer });
   font-weight: 600;
   font-size: 0.95rem;
   color: #e2e8f0;
+}
+
+.error-banner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.error-banner p {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 0.9rem;
 }
 
 /* Custom Switch */
@@ -190,8 +235,24 @@ input:checked + .slider:before {
   box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);
 }
 
+.state-icon-bg-small {
+  width: 56px;
+  height: 56px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
 .icon-muted {
   color: #475569;
+}
+
+.icon-accent {
+  color: #60a5fa;
 }
 
 .state-desc {
@@ -211,6 +272,12 @@ input:checked + .slider:before {
   flex-direction: column;
   gap: 1.5rem;
   flex: 1;
+  min-height: 0;
+}
+
+.toggle-sub-container {
+  display: flex;
+  justify-content: center;
 }
 
 .checkbox-option {
@@ -220,7 +287,7 @@ input:checked + .slider:before {
   cursor: pointer;
   font-size: 0.92rem;
   color: #cbd5e1;
-  padding: 0.85rem 1rem;
+  padding: 0.75rem 1rem;
   background: rgba(15, 23, 42, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 12px;
@@ -239,23 +306,47 @@ input:checked + .slider:before {
   cursor: pointer;
 }
 
-.info-card {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: 12px;
-  padding: 1.15rem;
-  border-left: 4px solid #3b82f6;
+.embed-mount {
+  position: relative;
+  flex: 1;
+  min-height: 320px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #000;
+  display: flex;
+  flex-direction: column;
 }
 
-.info-desc {
+.embed-placeholder {
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.5rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.35) 0%, rgba(15, 23, 42, 0.9) 100%);
+}
+
+.preview-title {
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #e2e8f0;
+}
+
+.preview-desc {
   margin: 0;
-  color: #93c5fd;
+  color: #94a3b8;
   font-size: 0.9rem;
   line-height: 1.5;
+  max-width: 320px;
 }
 
-.info-desc strong {
-  color: #bfdbfe;
+.preview-desc strong {
+  color: #cbd5e1;
 }
 
 .action-grid {
