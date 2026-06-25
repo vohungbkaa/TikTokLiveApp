@@ -49,6 +49,8 @@ pub fn run() {
             commands::connector::get_connector_status,
             commands::connector::get_connector_debug_logs,
             commands::connector::ensure_live_connector,
+            commands::live_viewer::open_live_viewer,
+            commands::live_viewer::close_live_viewer,
             commands::product::list_products,
             commands::product::create_product,
             commands::product::update_stock,

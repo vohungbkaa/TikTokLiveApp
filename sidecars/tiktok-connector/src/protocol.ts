@@ -39,3 +39,14 @@ export function emitError(stage: string, code: string, message: string) {
 export function emitEvent(event_type: string, data: any) {
     emitLine({ type: "event", event_type, data });
 }
+
+export function emitStream(data: {
+    hls_url?: string;
+    flv_url?: string;
+    live_page_url: string;
+    room_id?: string;
+    source: string;
+    error?: string;
+}) {
+    emitLine({ type: "stream", ...data });
+}

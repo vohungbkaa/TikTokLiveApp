@@ -15,6 +15,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "@types/sortablejs": "^1.15.9",
     "@vueuse/core": "^14.3.0",
+    "hls.js": "^1.6.16",
     "lucide-vue-next": "^1.0.0",
     "pinia": "^3.0.4",
     "sortablejs": "^1.15.7",

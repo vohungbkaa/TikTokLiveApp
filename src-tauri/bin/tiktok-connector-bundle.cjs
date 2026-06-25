@@ -80169,6 +80169,9 @@ function emitError(stage, code, message) {
 function emitEvent(event_type, data) {
   emitLine({ type: "event", event_type, data });
 }
+function emitStream(data) {
+  emitLine({ type: "stream", ...data });
+}
 
 // src/mappers.ts
 function mapCommentEvent(data) {
@@ -80190,26 +80193,121 @@ function mapCommentEvent(data) {
   };
 }
 
+// src/stream.ts
+function pickFlvUrl(flv) {
+  if (!flv) return void 0;
+  if (typeof flv === "string" && flv.startsWith("http")) return flv;
+  if (typeof flv === "object" && flv !== null) {
+    const map = flv;
+    for (const key of ["FULL_HD1", "HD1", "SD1", "LD1"]) {
+      if (map[key]?.startsWith("http")) return map[key];
+    }
+    for (const value of Object.values(map)) {
+      if (typeof value === "string" && value.startsWith("http")) return value;
+    }
+  }
+  return void 0;
+}
+function extractFromRoomInfo(roomInfo) {
+  if (!roomInfo || typeof roomInfo !== "object") return {};
+  const info = roomInfo;
+  const data = info.data ?? info;
+  const streamUrl = data.stream_url;
+  if (!streamUrl) return {};
+  const hls = streamUrl.hls_pull_url;
+  const hlsUrl = typeof hls === "string" && hls.length > 0 ? hls : void 0;
+  const flvUrl = pickFlvUrl(streamUrl.flv_pull_url) ?? pickFlvUrl(streamUrl.rtmp_pull_url);
+  return { hls: hlsUrl, flv: flvUrl };
+}
+function findUrlDeep(obj, key) {
+  if (!obj || typeof obj !== "object") return void 0;
+  const record = obj;
+  const direct = record[key];
+  if (typeof direct === "string" && direct.startsWith("http")) return direct;
+  for (const value of Object.values(record)) {
+    const found = findUrlDeep(value, key);
+    if (found) return found;
+  }
+  return void 0;
+}
+async function resolveStreamInfo(connection, username) {
+  const cleanUser = username.replace(/^@/, "").split(/[/?]/)[0];
+  const livePageUrl = `https://www.tiktok.com/@${cleanUser}/live`;
+  const roomId = connection.roomId;
+  const fromConnect = extractFromRoomInfo(connection.roomInfo);
+  if (fromConnect.hls || fromConnect.flv) {
+    return {
+      hls_url: fromConnect.hls,
+      flv_url: fromConnect.flv,
+      live_page_url: livePageUrl,
+      room_id: roomId,
+      source: "connect_room_info"
+    };
+  }
+  try {
+    const fetched = await connection.fetchRoomInfo();
+    const fromFetch = extractFromRoomInfo(fetched);
+    if (fromFetch.hls || fromFetch.flv) {
+      return {
+        hls_url: fromFetch.hls,
+        flv_url: fromFetch.flv,
+        live_page_url: livePageUrl,
+        room_id: roomId,
+        source: "fetch_room_info"
+      };
+    }
+  } catch {
+  }
+  try {
+    const sigi = await RouteConfig.fetchRoomInfoFromHtml({
+      webClient: connection.webClient,
+      uniqueId: cleanUser
+    });
+    const hls = findUrlDeep(sigi, "hls_pull_url");
+    const flv = findUrlDeep(sigi, "flv_pull_url") ?? findUrlDeep(sigi, "rtmp_pull_url");
+    if (hls || flv) {
+      return {
+        hls_url: hls,
+        flv_url: flv,
+        live_page_url: livePageUrl,
+        room_id: roomId,
+        source: "html_scrape"
+      };
+    }
+  } catch {
+  }
+  return {
+    live_page_url: livePageUrl,
+    room_id: roomId,
+    source: "unavailable",
+    error: "TikTok ch\u01B0a tr\u1EA3 link stream (c\u1EA7n cookie \u0111\u0103ng nh\u1EADp ho\u1EB7c m\u1EDF c\u1EEDa s\u1ED5 live)"
+  };
+}
+
 // src/client.ts
 var TikTokClient = class {
-  constructor(username, sessionId) {
+  constructor(username, sessionId, tiktokSessionCookie) {
     this.username = username;
     this.sessionId = sessionId;
+    this.tiktokSessionCookie = tiktokSessionCookie;
   }
   username;
   sessionId;
+  tiktokSessionCookie;
   connection = null;
   isShuttingDown = false;
   async connect() {
     emitHealth("room_resolve", true);
+    const sessionOptions = this.tiktokSessionCookie ? { cookie: this.tiktokSessionCookie } : void 0;
     this.connection = new TikTokLiveConnection(this.username, {
       processInitialData: false,
       enableExtendedGiftInfo: false,
       enableWebsocketUpgrade: true,
       requestPollingIntervalMs: 2e3,
+      session: sessionOptions,
       clientParams: {
-        "app_language": "vi-VN",
-        "device_platform": "web"
+        app_language: "vi-VN",
+        device_platform: "web"
       }
     });
     this.setupEvents();
@@ -80217,9 +80315,23 @@ var TikTokClient = class {
       emitHealth("connecting", true);
       await this.connection.connect();
       emitHealth("connected", true);
+      await this.emitStreamInfo();
     } catch (err) {
       emitError("websocket_connect", "CONNECT_FAILED", err.message || "Failed to connect");
       this.handleDisconnect();
+    }
+  }
+  async emitStreamInfo() {
+    if (!this.connection) return;
+    try {
+      const info = await resolveStreamInfo(this.connection, this.username);
+      emitStream(info);
+    } catch (err) {
+      emitStream({
+        live_page_url: `https://www.tiktok.com/@${this.username.replace(/^@/, "")}/live`,
+        source: "error",
+        error: err?.message || "Failed to resolve stream URL"
+      });
     }
   }
   setupEvents() {
@@ -80237,7 +80349,7 @@ var TikTokClient = class {
     this.connection.on("error", (err) => {
       emitError("unknown", "CONNECTION_ERROR", err.message || "Unknown error");
     });
-    this.connection.on("streamEnd", (actionId) => {
+    this.connection.on("streamEnd", () => {
       emitHealth("stream_ended", true);
       this.handleDisconnect();
     });
@@ -80256,7 +80368,7 @@ var TikTokClient = class {
     if (this.connection) {
       try {
         this.connection.disconnect();
-      } catch (e) {
+      } catch {
       }
     }
     process.exit(0);
@@ -80283,10 +80395,14 @@ function setupStdinListener(client2) {
 }
 
 // src/index.ts
-program.requiredOption("-u, --username <username>", "TikTok Username").requiredOption("-s, --session-id <sessionId>", "Internal Session ID");
+program.requiredOption("-u, --username <username>", "TikTok Username").requiredOption("-s, --session-id <sessionId>", "Internal Session ID").option(
+  "--tiktok-cookie <cookie>",
+  "TikTok session cookie (sessionid=...; tt-target-idc=...) for stream playback"
+);
 program.parse(process.argv);
 var options = program.opts();
-var client = new TikTokClient(options.username, options.sessionId);
+var tiktokCookie = options.tiktokCookie || process.env.TIKTOK_SESSION_COOKIE || process.env.TIKTOK_SESSIONID;
+var client = new TikTokClient(options.username, options.sessionId, tiktokCookie);
 setupStdinListener(client);
 process.on("SIGINT", () => client.stop());
 process.on("SIGTERM", () => client.stop());

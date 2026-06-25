@@ -19,6 +19,25 @@
           </div>
         </div>
 
+        <div class="settings-card">
+          <div class="card-header">
+            <h3>📺 Xem Live TikTok</h3>
+          </div>
+          <div class="card-body viewer-settings">
+            <label class="setting-toggle">
+              <input type="checkbox" :checked="prefs.watchLiveEnabled" @change="onWatchToggle" />
+              <span>Bật xem live TikTok</span>
+            </label>
+            <label v-if="prefs.watchLiveEnabled" class="setting-toggle setting-toggle--sub">
+              <input type="checkbox" v-model="prefs.autoOpenOnSessionStart" />
+              <span>Tự mở cửa sổ live khi bắt đầu phiên</span>
+            </label>
+            <p class="setting-hint">
+              Có thể đăng nhập bằng bất kỳ tài khoản TikTok để xem hình live. Comment chốt đơn vẫn hoạt động khi tắt tuỳ chọn này.
+            </p>
+          </div>
+        </div>
+
         <!-- Advanced Tools -->
         <div class="settings-card">
           <div class="card-header">
@@ -40,7 +59,22 @@
 </template>
 
 <script setup lang="ts">
-// Removed unused router import as we use $router directly in template
+import { invoke } from '@tauri-apps/api/core';
+import { useLiveViewerPrefs } from '../composables/useLiveViewerPrefs';
+
+const { prefs, setWatchLiveEnabled } = useLiveViewerPrefs();
+
+const onWatchToggle = async (event: Event) => {
+  const enabled = (event.target as HTMLInputElement).checked;
+  setWatchLiveEnabled(enabled);
+  if (!enabled) {
+    try {
+      await invoke('close_live_viewer');
+    } catch (e) {
+      console.error('[Settings] close_live_viewer failed', e);
+    }
+  }
+};
 </script>
 
 <style scoped>
@@ -106,6 +140,33 @@
   padding: 1.5rem;
 }
 
+.viewer-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.setting-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.setting-toggle--sub {
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
+}
+
+.setting-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .tool-item {
   display: flex;
   justify-content: space-between;
@@ -114,6 +175,7 @@
   border: 1px solid var(--border);
   padding: 1rem;
   border-radius: 12px;
+  gap: 1rem;
 }
 
 .tool-info h4 {

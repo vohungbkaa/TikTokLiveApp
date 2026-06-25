@@ -7,26 +7,34 @@
           <div class="status-indicator" :class="connectorStatus">
             <span class="pulse-dot"></span> {{ statusLabel }}
           </div>
-          <h2 v-if="activeSession">{{ activeSession.title || activeSession.platformSessionId || 'Phiên Live' }}</h2>
-          <h2 v-else>Chưa có phiên live đang chạy</h2>
-          <p class="muted" v-if="activeSession">
-            @{{ liveUsername }} · {{ activeSession.status }}
-            <span v-if="connectorSnapshot">
-              · {{ connectorSnapshot.processAlive ? 'process ok' : 'process dead' }}
-              · stdout={{ connectorSnapshot.stdoutLines ?? 0 }}
-              · events={{ connectorSnapshot.eventCount ?? 0 }}
-            </span>
-          </p>
-          <button
-            v-if="activeSession && connectorStatus === 'connecting'"
-            class="btn-retry"
-            @click="retryConnector"
-          >
-            Thử kết nối lại
-          </button>
-          <p class="muted" v-else>
-            Vào tab "Cấu Hình Live" để tạo và bắt đầu phiên.
-          </p>
+
+          <div v-if="!activeSession" class="video-empty">
+            <h2>Chưa có phiên live đang chạy</h2>
+            <p class="muted">Vào tab "Cấu Hình Live" để tạo và bắt đầu phiên.</p>
+          </div>
+
+          <LiveViewerPanel
+            v-else
+            :username="liveUsername"
+          />
+
+          <div class="video-meta" v-if="activeSession">
+            <h2>{{ activeSession.title || activeSession.platformSessionId || 'Phiên Live' }}</h2>
+            <p class="muted">
+              @{{ liveUsername }} · {{ activeSession.status }}
+              <span v-if="connectorSnapshot">
+                · {{ connectorSnapshot.processAlive ? 'process ok' : 'process dead' }}
+                · events={{ connectorSnapshot.eventCount ?? 0 }}
+              </span>
+            </p>
+            <button
+              v-if="connectorStatus === 'connecting'"
+              class="btn-retry"
+              @click="retryConnector"
+            >
+              Thử kết nối lại
+            </button>
+          </div>
         </div>
 
         <div v-if="debugLogs.length > 0" class="glass-panel debug-panel">
@@ -92,9 +100,13 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import LiveViewerPanel from '../components/LiveViewerPanel.vue';
+import { useLiveViewerPrefs } from '../composables/useLiveViewerPrefs';
 import type { LiveEvent } from '../types/live-event';
 import type { LiveSession } from '../types/session';
 import type { ConnectorSnapshot, DebugLogEntry } from '../types/connector';
+
+const { prefs: liveViewerPrefs } = useLiveViewerPrefs();
 
 const events = ref<LiveEvent[]>([]);
 const activeSession = ref<LiveSession | null>(null);
@@ -218,6 +230,8 @@ const loadRunningSession = async () => {
           chatStreamRef.value.scrollTop = chatStreamRef.value.scrollHeight;
         }
       });
+
+      await maybeAutoOpenLive();
     } else {
       events.value = [];
       connectorStatus.value = 'disconnected';
@@ -229,6 +243,24 @@ const loadRunningSession = async () => {
       level: 'error',
       message: `loadRunningSession: ${String(e)}`,
     });
+  }
+};
+
+const maybeAutoOpenLive = async () => {
+  if (
+    !activeSession.value ||
+    !liveViewerPrefs.value.watchLiveEnabled ||
+    !liveViewerPrefs.value.autoOpenOnSessionStart
+  ) {
+    return;
+  }
+  try {
+    await invoke('open_live_viewer', {
+      username: liveUsername.value,
+      loginFirst: false,
+    });
+  } catch (e) {
+    console.error('[LiveConsole] auto open live failed', e);
   }
 };
 
@@ -351,16 +383,66 @@ const sendMockComment = async () => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.left-panel::-webkit-scrollbar {
+  width: 6px;
+}
+.left-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .video-placeholder {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  gap: 0.75rem;
   position: relative;
+  padding: 1rem;
   background: linear-gradient(180deg, rgba(30,41,59,0.8) 0%, rgba(15,23,42,0.9) 100%);
+  min-height: 420px;
+}
+
+.video-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.video-meta h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.btn-open-live-inline {
+  align-self: flex-start;
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  padding: 0.4rem 0.85rem;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .status-indicator {

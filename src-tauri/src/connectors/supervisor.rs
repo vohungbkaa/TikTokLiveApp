@@ -29,6 +29,11 @@ pub struct ConnectorSnapshot {
     pub stdout_lines: u64,
     pub event_count: u64,
     pub last_message: Option<String>,
+    pub stream_hls_url: Option<String>,
+    pub stream_flv_url: Option<String>,
+    pub live_page_url: Option<String>,
+    pub stream_source: Option<String>,
+    pub stream_error: Option<String>,
 }
 
 pub struct ConnectorSupervisor {
@@ -271,6 +276,45 @@ impl ConnectorSupervisor {
                             let _ = app_handle.emit("connector:health", &msg);
                             let _ = app_handle.emit("connector:snapshot", &snapshot_payload);
                         }
+                    }
+                    "stream" => {
+                        let snapshot_payload = {
+                            let mut snap = snapshot.lock().await;
+                            snap.stream_hls_url = msg
+                                .get("hls_url")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string);
+                            snap.stream_flv_url = msg
+                                .get("flv_url")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string);
+                            snap.live_page_url = msg
+                                .get("live_page_url")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string);
+                            snap.stream_source = msg
+                                .get("source")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string);
+                            snap.stream_error = msg
+                                .get("error")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string);
+                            snap.clone()
+                        };
+                        push_log_inner(
+                            &app_handle,
+                            &debug_logs,
+                            "info",
+                            format!(
+                                "Stream resolved source={} hls={}",
+                                snapshot_payload.stream_source.as_deref().unwrap_or("?"),
+                                snapshot_payload.stream_hls_url.is_some()
+                            ),
+                        )
+                        .await;
+                        let _ = app_handle.emit("connector:stream", &msg);
+                        let _ = app_handle.emit("connector:snapshot", &snapshot_payload);
                     }
                     "error" => {
                         {

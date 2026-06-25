@@ -1,25 +1,35 @@
 import { TikTokLiveConnection } from 'tiktok-live-connector';
-import { emitHealth, emitError, emitEvent } from './protocol';
+import { emitHealth, emitError, emitEvent, emitStream } from './protocol';
 import { mapCommentEvent } from './mappers';
+import { resolveStreamInfo } from './stream';
 
 export class TikTokClient {
-    private connection: any | null = null;
+    private connection: TikTokLiveConnection | null = null;
     private isShuttingDown = false;
 
-    constructor(private username: string, private sessionId: string) {}
+    constructor(
+        private username: string,
+        private sessionId: string,
+        private tiktokSessionCookie?: string,
+    ) {}
 
     public async connect() {
         emitHealth("room_resolve", true);
-        
+
+        const sessionOptions = this.tiktokSessionCookie
+            ? { cookie: this.tiktokSessionCookie }
+            : undefined;
+
         this.connection = new TikTokLiveConnection(this.username, {
             processInitialData: false,
             enableExtendedGiftInfo: false,
             enableWebsocketUpgrade: true,
             requestPollingIntervalMs: 2000,
+            session: sessionOptions,
             clientParams: {
-                "app_language": "vi-VN",
-                "device_platform": "web"
-            }
+                app_language: "vi-VN",
+                device_platform: "web",
+            },
         });
 
         this.setupEvents();
@@ -28,9 +38,24 @@ export class TikTokClient {
             emitHealth("connecting", true);
             await this.connection.connect();
             emitHealth("connected", true);
+            await this.emitStreamInfo();
         } catch (err: any) {
             emitError("websocket_connect", "CONNECT_FAILED", err.message || "Failed to connect");
             this.handleDisconnect();
+        }
+    }
+
+    private async emitStreamInfo() {
+        if (!this.connection) return;
+        try {
+            const info = await resolveStreamInfo(this.connection, this.username);
+            emitStream(info);
+        } catch (err: any) {
+            emitStream({
+                live_page_url: `https://www.tiktok.com/@${this.username.replace(/^@/, '')}/live`,
+                source: "error",
+                error: err?.message || "Failed to resolve stream URL",
+            });
         }
     }
 
@@ -52,8 +77,8 @@ export class TikTokClient {
         this.connection.on('error', (err: any) => {
             emitError("unknown", "CONNECTION_ERROR", err.message || "Unknown error");
         });
-        
-        this.connection.on('streamEnd', (actionId: any) => {
+
+        this.connection.on('streamEnd', () => {
             emitHealth("stream_ended", true);
             this.handleDisconnect();
         });
@@ -66,7 +91,7 @@ export class TikTokClient {
             if (!this.isShuttingDown) {
                 this.connect();
             }
-        }, 5000); // 5s reconnect
+        }, 5000);
     }
 
     public stop() {
@@ -74,7 +99,9 @@ export class TikTokClient {
         if (this.connection) {
             try {
                 this.connection.disconnect();
-            } catch(e) {}
+            } catch {
+                // ignore
+            }
         }
         process.exit(0);
     }

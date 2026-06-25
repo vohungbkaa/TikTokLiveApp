@@ -91,6 +91,11 @@ impl SidecarProcess {
             ));
         }
 
+        let bundle_str = bundle_path
+            .to_str()
+            .ok_or_else(|| "Invalid sidecar bundle path".to_string())?
+            .to_string();
+
         tracing::info!(
             "[sidecar] spawn node={} bundle={} user=@{} session={}",
             node_path.display(),
@@ -99,12 +104,25 @@ impl SidecarProcess {
             session_id
         );
 
-        let mut child = Command::new(&node_path)
-            .arg(&bundle_path)
+        let mut cmd = Command::new(&node_path);
+        cmd.arg(&bundle_str)
             .arg("--username")
             .arg(username)
             .arg("--session-id")
-            .arg(session_id)
+            .arg(session_id);
+
+        if let Ok(cookie) = std::env::var("TIKTOK_SESSION_COOKIE") {
+            if !cookie.is_empty() {
+                cmd.arg("--tiktok-cookie").arg(cookie);
+            }
+        } else if let Ok(sessionid) = std::env::var("TIKTOK_SESSIONID") {
+            if !sessionid.is_empty() {
+                let cookie_value = format!("sessionid={sessionid}");
+                cmd.arg("--tiktok-cookie").arg(cookie_value);
+            }
+        }
+
+        let mut child = cmd
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
