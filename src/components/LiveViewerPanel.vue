@@ -1,38 +1,45 @@
 <template>
   <div class="live-viewer-panel">
     <div class="viewer-toggle-row">
-      <label class="toggle-label">
-        <input type="checkbox" :checked="prefs.watchLiveEnabled" @change="onToggleWatch" />
-        <span>Xem live TikTok</span>
-      </label>
-      <label v-if="prefs.watchLiveEnabled" class="toggle-label toggle-label--sub">
-        <input type="checkbox" v-model="prefs.autoOpenOnSessionStart" />
-        <span>Tự mở khi bắt đầu phiên</span>
+      <label class="switch-label">
+        <div class="switch">
+          <input type="checkbox" :checked="prefs.watchLiveEnabled" @change="onToggleWatch" />
+          <span class="slider round"></span>
+        </div>
+        <span class="switch-text">Bật xem hình Live</span>
       </label>
     </div>
 
-    <div v-if="!prefs.watchLiveEnabled" class="viewer-off">
-      <p>Chỉ dùng luồng comment để chốt đơn. Bật tuỳ chọn phía trên nếu muốn xem hình live.</p>
+    <div v-if="!prefs.watchLiveEnabled" class="state-off">
+      <div class="state-icon-bg">
+        <MonitorPlay :size="32" class="icon-muted" />
+      </div>
+      <p class="state-desc">Đang chạy ở chế độ <strong>tiết kiệm tài nguyên</strong>. <br/>Chỉ hút comment chốt đơn, không tải video.</p>
     </div>
 
-    <div v-else class="viewer-on">
-      <div class="viewer-preview">
-        <div class="preview-icon">📺</div>
-        <p class="preview-title">Xem live trong cửa sổ TikTok</p>
-        <p class="preview-desc">
-          Có thể đăng nhập bằng <strong>bất kỳ tài khoản TikTok</strong> (không cần trùng tài khoản bán hàng).
-          Sau khi đăng nhập, app mở thẳng phiên live <strong>@{{ username }}</strong>.
+    <div v-else class="state-on">
+      <label class="checkbox-option">
+        <input type="checkbox" v-model="prefs.autoOpenOnSessionStart" class="custom-checkbox" />
+        <span>Tự động bật cửa sổ khi tạo phiên mới</span>
+      </label>
+
+      <div class="info-card">
+        <p class="info-desc">
+          Bạn có thể đăng nhập bằng <strong>bất kỳ tài khoản TikTok nào</strong> để xem.
+          Hệ thống sẽ tự động điều hướng tới luồng live của <strong>@{{ username }}</strong>.
         </p>
       </div>
 
-      <div class="viewer-actions">
-        <button class="btn-primary" type="button" :disabled="!username" @click="loginAndWatch">
-          Đăng nhập & xem live
+      <div class="action-grid">
+        <button class="btn-action primary" :disabled="!username" @click="loginAndWatch">
+          <LogIn :size="18" /> Đăng nhập & Xem
         </button>
-        <button class="btn-secondary" type="button" :disabled="!username" @click="watchDirect">
-          Xem live (đã đăng nhập)
+        <button class="btn-action secondary" :disabled="!username" @click="watchDirect">
+          <ExternalLink :size="18" /> Xem ngay (Đã đăng nhập)
         </button>
-        <button class="btn-ghost" type="button" @click="closeViewer">Đóng cửa sổ live</button>
+        <button class="btn-action danger-ghost" @click="closeViewer">
+          <XCircle :size="18" /> Đóng cửa sổ live
+        </button>
       </div>
     </div>
   </div>
@@ -41,6 +48,7 @@
 <script setup lang="ts">
 import { invoke } from '@tauri-apps/api/core';
 import { useLiveViewerPrefs } from '../composables/useLiveViewerPrefs';
+import { MonitorPlay, LogIn, ExternalLink, XCircle } from 'lucide-vue-next';
 
 const props = defineProps<{
   username: string;
@@ -91,107 +99,226 @@ defineExpose({ loginAndWatch, watchDirect, closeViewer });
 .live-viewer-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  width: 100%;
+  flex: 1;
+  padding: 1rem;
+  padding-top: 1.5rem;
 }
 
 .viewer-toggle-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.25rem;
+  justify-content: flex-end;
+  margin-bottom: 2rem;
+  padding-right: 0.5rem;
 }
 
-.toggle-label {
-  display: inline-flex;
+.switch-label {
+  display: flex;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.92rem;
-  font-weight: 600;
+  gap: 0.75rem;
   cursor: pointer;
   user-select: none;
 }
 
-.toggle-label--sub {
-  font-weight: 500;
-  color: var(--text-muted);
+.switch-text {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #e2e8f0;
 }
 
-.viewer-off,
-.viewer-on {
-  border: 1px dashed rgba(148, 163, 184, 0.25);
-  border-radius: 14px;
-  padding: 1rem;
+/* Custom Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(148, 163, 184, 0.3);
+  transition: .3s;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.slider.round {
+  border-radius: 24px;
+}
+.slider.round:before {
+  border-radius: 50%;
+}
+input:checked + .slider {
+  background-color: #3b82f6;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+input:checked + .slider:before {
+  transform: translateX(20px);
 }
 
-.viewer-off p {
+.state-off {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1.25rem;
+}
+
+.state-icon-bg {
+  width: 72px;
+  height: 72px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.icon-muted {
+  color: #475569;
+}
+
+.state-desc {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  max-width: 280px;
   margin: 0;
-  color: var(--text-muted);
+}
+
+.state-desc strong {
+  color: #e2e8f0;
+}
+
+.state-on {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: #cbd5e1;
+  padding: 0.85rem 1rem;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.checkbox-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.custom-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.info-card {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+  padding: 1.15rem;
+  border-left: 4px solid #3b82f6;
+}
+
+.info-desc {
+  margin: 0;
+  color: #93c5fd;
   font-size: 0.9rem;
   line-height: 1.5;
 }
 
-.viewer-preview {
-  text-align: center;
-  margin-bottom: 0.85rem;
+.info-desc strong {
+  color: #bfdbfe;
 }
 
-.preview-icon {
-  font-size: 2rem;
-  margin-bottom: 0.35rem;
-}
-
-.preview-title {
-  margin: 0 0 0.35rem;
-  font-weight: 700;
-}
-
-.preview-desc {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.88rem;
-  line-height: 1.45;
-}
-
-.viewer-actions {
+.action-grid {
+  margin-top: auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-bottom: 0.5rem;
 }
 
-.btn-primary,
-.btn-secondary,
-.btn-ghost {
-  border-radius: 10px;
-  padding: 0.55rem 0.95rem;
+.btn-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  border-radius: 12px;
   font-weight: 600;
+  font-size: 0.95rem;
   cursor: pointer;
   border: 1px solid transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.btn-primary {
-  background: var(--primary);
-  color: #fff;
-}
-
-.btn-primary:disabled {
+.btn-action:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.btn-secondary {
-  background: rgba(59, 130, 246, 0.15);
+.btn-action.primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.btn-action.primary:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+}
+
+.btn-action.secondary {
+  background: rgba(59, 130, 246, 0.1);
   color: #93c5fd;
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: rgba(59, 130, 246, 0.25);
 }
 
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.btn-action.secondary:not(:disabled):hover {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
-.btn-ghost {
+.btn-action.danger-ghost {
   background: transparent;
-  color: var(--text-muted);
-  border-color: var(--border);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.2);
+  margin-top: 0.5rem;
+}
+
+.btn-action.danger-ghost:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
 }
 </style>
